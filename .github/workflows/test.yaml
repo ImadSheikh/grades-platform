@@ -4,30 +4,61 @@ on:
   pull_request:
   push:
     branches: [main]
+    paths: ["services/**"]
+  workflow_dispatch:
 
 permissions:
   contents: read
+  pull-requests: read # paths-filter asks the API which files a pull request changed
 
 jobs:
-  run-tests:
+  filter:
+    # FILL IN (A4b.1): the runner: a pinned Ubuntu version (not -latest), the one test.yaml used in A2 and A3
     runs-on: ubuntu-24.04
+    outputs:
+      # FILL IN (A4b.2): an output of the job named services: the output changes of the step whose id is filter
+      services: ${{ steps.filter.output.changes }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: filter
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          filters: .github/utils/file-filters.yaml
+      - run: |
+          echo "changed services: $CHANGES"
+        env:
+          CHANGES: ${{ steps.filter.outputs.changes }}
+
+  run-tests:
+    # FILL IN (A4b.3): this job starts only after the job filter, and may read its outputs
+    needs: filter
+    if: ${{ needs.filter.outputs.services != '[]' && needs.filter.outputs.services != '' }}
+    # FILL IN (A4b.4): the runner: a pinned Ubuntu version (not -latest), the one test.yaml used in A2 and A3
     timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
-        service:
-          # FILL IN (A3.1): the list: one item per service, the folder of each of the three services (look under services/)
-          - services/python/grades-api
-          - services/python/grades-report
-          - services/web/grades-web
+        # FILL IN (A4b.5): the values of service: the output services of the job filter, a JSON string made into a list
+        service: ${{ fromJSON(needs.filter.outputs.services) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-service
         with:
-          # FILL IN (A3.2): service_path: the folder of the service that this copy of the job tests
           service_path: ${{ matrix.service }}
           install_python: ${{ startsWith(matrix.service, 'services/python/') }}
       - working-directory: ${{ matrix.service }}
         run: make install-ci
       - working-directory: ${{ matrix.service }}
         run: make test
+
+  # The check to require before a merge. It is skipped when everything passed
+  # (and a skipped check counts as passed), and fails when a job failed.
+  required-check:
+    needs: [filter, run-tests]
+    if: ${{ cancelled() || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'failure') }}
+    # FILL IN (A4b.6): the runner: a pinned Ubuntu version (not -latest), the one test.yaml used in A2 and A3
+    runs-on: ubuntu-24.04
+    steps:
+      - run: |
+          echo "::error::A job this check depends on failed or was cancelled."
+          exit 1
