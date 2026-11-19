@@ -32,6 +32,7 @@ jobs:
   run-tests:
     # FILL IN (A4b.3): this job starts only after the job filter, and may read its outputs
     needs: filter
+    runs-on: ubuntu-24.04
     if: ${{ needs.filter.outputs.services != '[]' && needs.filter.outputs.services != '' }}
     # FILL IN (A4b.4): the runner: a pinned Ubuntu version (not -latest), the one test.yaml used in A2 and A3
     timeout-minutes: 10
